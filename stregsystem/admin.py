@@ -3,6 +3,7 @@ from django import forms
 from django.contrib.admin.views.autocomplete import AutocompleteJsonView
 from django.contrib import messages
 from django.contrib.admin.models import LogEntry
+from django.db.models import QuerySet, Model
 
 from stregsystem.models import (
     Category,
@@ -21,10 +22,12 @@ from stregsystem.models import (
 from stregsystem.templatetags.stregsystem_extras import money
 from stregsystem.utils import make_active_productlist_query, make_inactive_productlist_query
 
+from typing import Any
 
-def refund(modeladmin, request, queryset):
+
+def refund(modeladmin:admin.ModelAdmin, request, queryset:QuerySet[Sale]) -> None:
     for obj in queryset:
-        transaction = PayTransaction(obj.price)
+        transaction:PayTransaction = PayTransaction(obj.price)
         obj.member.rollback(transaction)
         obj.member.save()
     queryset.delete()
@@ -34,8 +37,8 @@ refund.short_description = "Refund selected"
 
 
 class SaleAdmin(admin.ModelAdmin):
-    list_filter = ('room', 'timestamp')
-    list_display = (
+    list_filter:tuple[str] = ('room', 'timestamp')
+    list_display:tuple[str] = (
         'get_username',
         'get_fullname',
         'get_product_name',
@@ -43,13 +46,13 @@ class SaleAdmin(admin.ModelAdmin):
         'timestamp',
         'get_price_display',
     )
-    actions = [refund]
-    search_fields = ['^member__username', '=product__id', 'product__name']
-    valid_lookups = 'member'
-    autocomplete_fields = ['member', 'product']
+    actions:list = [refund]
+    search_fields:list[str] = ['^member__username', '=product__id', 'product__name']
+    valid_lookups:str = 'member'
+    autocomplete_fields:list[str] = ['member', 'product']
 
     class Media:
-        css = {'all': ('stregsystem/select2-stregsystem.css',)}
+        css:dict[str, tuple[str]] = {'all': ('stregsystem/select2-stregsystem.css',)}
 
     def get_username(self, obj):
         return obj.member.username
@@ -76,15 +79,15 @@ class SaleAdmin(admin.ModelAdmin):
     get_room_name.admin_order_field = "room__name"
 
     def delete_model(self, request, obj):
-        transaction = PayTransaction(obj.price)
+        transaction:PayTransaction = PayTransaction(obj.price)
         obj.member.rollback(transaction)
         obj.member.save()
         super(SaleAdmin, self).delete_model(request, obj)
 
-    def save_model(self, request, obj, form, change):
+    def save_model(self, request, obj, form, change:bool):
         if change:
             return
-        transaction = PayTransaction(obj.price)
+        transaction:PayTransaction = PayTransaction(obj.price)
         obj.member.fulfill(transaction)
         obj.member.save()
         super(SaleAdmin, self).save_model(request, obj, form, change)
@@ -94,8 +97,8 @@ class SaleAdmin(admin.ModelAdmin):
             obj.price = 0
         return "{0:.2f} kr.".format(obj.price / 100.0)
 
-    get_price_display.short_description = "Price"
-    get_price_display.admin_order_field = "price"
+    #get_price_display.short_description = "Price"
+    #get_price_display.admin_order_field = "price"
 
 
 def toggle_active_selected_products(modeladmin, request, queryset):
@@ -109,10 +112,10 @@ def toggle_active_selected_products(modeladmin, request, queryset):
 
 
 class ProductActivatedListFilter(admin.SimpleListFilter):
-    title = 'activated'
-    parameter_name = 'activated'
+    title:str = 'activated'
+    parameter_name:str = 'activated'
 
-    def lookups(self, request, model_admin):
+    def lookups(self, request, model_admin) -> tuple[tuple[str]]:
         return (
             ('Yes', 'Yes'),
             ('No', 'No'),
@@ -128,15 +131,15 @@ class ProductActivatedListFilter(admin.SimpleListFilter):
 
 
 class ProductAdmin(admin.ModelAdmin):
-    search_fields = ('name', 'price', 'id')
-    list_filter = (ProductActivatedListFilter, 'deactivate_date', 'price')
-    list_display = (
+    search_fields:tuple[str] = ('name', 'price', 'id')
+    list_filter:tuple[admin.SimpleListFilter | str] = (ProductActivatedListFilter, 'deactivate_date', 'price')
+    list_display:tuple[str] = (
         'activated',
         'id',
         'name',
         'get_price_display',
     )
-    fields = (
+    fields:tuple[str | tuple[str]] = (
         "name",
         "price",
         ("active", "deactivate_date"),
@@ -146,10 +149,10 @@ class ProductAdmin(admin.ModelAdmin):
         "alcohol_content_ml",
         "caffeine_content_mg",
     )
-    readonly_fields = ("get_bought",)
+    readonly_fields:tuple[str] = ("get_bought",)
 
-    actions = [toggle_active_selected_products]
-    filter_horizontal = ('categories', 'rooms')
+    actions:list = [toggle_active_selected_products]
+    filter_horizontal:tuple[str] = ('categories', 'rooms')
 
     def get_price_display(self, obj):
         if obj.price is None:
@@ -172,25 +175,25 @@ class ProductAdmin(admin.ModelAdmin):
 
 
 class NamedProductAdmin(admin.ModelAdmin):
-    search_fields = (
+    search_fields:tuple[str] = (
         'name',
         'product',
     )
-    list_display = (
+    list_display:tuple[str] = (
         'name',
         'product',
     )
-    fields = (
+    fields:tuple[str] = (
         'name',
         'product',
     )
-    autocomplete_fields = [
+    autocomplete_fields:list[str] = [
         'product',
     ]
 
 
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'items_in_category')
+    list_display:tuple[str] = ('name', 'items_in_category')
 
     def items_in_category(self, obj):
         return obj.product_set.count()
@@ -199,7 +202,7 @@ class CategoryAdmin(admin.ModelAdmin):
 class MemberForm(forms.ModelForm):
     class Meta:
         model = Member
-        exclude = []
+        exclude:list = []
 
     def clean_username(self):
         username = self.cleaned_data['username']
@@ -211,12 +214,12 @@ class MemberForm(forms.ModelForm):
 
 class MemberAdmin(admin.ModelAdmin):
     form = MemberForm
-    list_filter = ('want_spam',)
-    search_fields = ('username', 'firstname', 'lastname', 'email')
-    list_display = ('username', 'firstname', 'lastname', 'balance', 'email', 'notes')
+    list_filter:tuple[str] = ('want_spam',)
+    search_fields:tuple[str] = ('username', 'firstname', 'lastname', 'email')
+    list_display:tuple[str] = ('username', 'firstname', 'lastname', 'balance', 'email', 'notes')
 
     # fieldsets is like fields, except that they are grouped and with descriptions
-    fieldsets = (
+    fieldsets:tuple[tuple[None | dict[str, tuple[str]]]] = (
         (
             None,
             {
@@ -234,7 +237,7 @@ class MemberAdmin(admin.ModelAdmin):
         ),
     )
 
-    def save_model(self, request, obj, form, change):
+    def save_model(self, request, obj, form, change:bool):
         if 'username' in form.changed_data and change:
             if Member.objects.filter(username__iexact=obj.username).exclude(pk=obj.pk).exists():
                 messages.add_message(request, messages.WARNING, 'Det brugernavn var allerede optaget')
@@ -253,18 +256,18 @@ class MemberAdmin(admin.ModelAdmin):
         """
 
         def get_queryset(self):
-            qs = super().get_queryset()
+            qs:QuerySet = super().get_queryset()
             return qs.filter(active=True).order_by('username')
 
 
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ('get_username', 'timestamp', 'get_amount_display', 'is_mobilepayment')
-    valid_lookups = 'member'
-    search_fields = ['member__username']
-    autocomplete_fields = ['member']
+    list_display:tuple[str] = ('get_username', 'timestamp', 'get_amount_display', 'is_mobilepayment')
+    valid_lookups:str = 'member'
+    search_fields:list[str] = ['member__username']
+    autocomplete_fields:list[str] = ['member']
 
     class Media:
-        css = {'all': ('stregsystem/select2-stregsystem.css',)}
+        css:dict[str, tuple[str]] = {'all': ('stregsystem/select2-stregsystem.css',)}
 
     def get_username(self, obj):
         return obj.member.username
@@ -287,7 +290,7 @@ class PaymentAdmin(admin.ModelAdmin):
 
 
 class MobilePaymentAdmin(admin.ModelAdmin):
-    list_display = (
+    list_display:tuple[str] = (
         'payment',
         'customer_name',
         'comment',
@@ -296,12 +299,12 @@ class MobilePaymentAdmin(admin.ModelAdmin):
         'get_amount_display',
         'status',
     )
-    valid_lookups = 'member'
-    search_fields = ['member__username']
-    autocomplete_fields = ['member', 'payment']
+    valid_lookups:str = 'member'
+    search_fields:list[str] = ['member__username']
+    autocomplete_fields:list[str] = ['member', 'payment']
 
     class Media:
-        css = {'all': ('stregsystem/select2-stregsystem.css',)}
+        css:dict[str, tuple[str]] = {'all': ('stregsystem/select2-stregsystem.css',)}
 
     def get_amount_display(self, obj):
         return money(obj.amount)
@@ -310,10 +313,10 @@ class MobilePaymentAdmin(admin.ModelAdmin):
     get_amount_display.admin_order_field = "amount"
 
     # django-bug, .delete() is not called https://stackoverflow.com/questions/1471909/django-model-delete-not-triggered
-    actions = ['really_delete_selected']
+    actions:list[str] = ['really_delete_selected']
 
     def get_actions(self, request):
-        actions = super(MobilePaymentAdmin, self).get_actions(request)
+        actions:dict[Any, Any] = super(MobilePaymentAdmin, self).get_actions(request)
         del actions['delete_selected']
         return actions
 
@@ -325,10 +328,10 @@ class MobilePaymentAdmin(admin.ModelAdmin):
 
 
 class LogEntryAdmin(admin.ModelAdmin):
-    date_hierarchy = 'action_time'
-    list_filter = ['content_type', 'action_flag']
-    search_fields = ['object_repr', 'change_message', 'user__username']
-    list_display = ['action_time', 'user', 'content_type', 'object_id', 'action_flag', 'change_message', 'object_repr']
+    date_hierarchy:str = 'action_time'
+    list_filter:list[str] = ['content_type', 'action_flag']
+    search_fields:list[str] = ['object_repr', 'change_message', 'user__username']
+    list_display:list[str] = ['action_time', 'user', 'content_type', 'object_id', 'action_flag', 'change_message', 'object_repr']
 
     def has_view_permission(self, request, obj=None):
         return request.user.is_superuser
@@ -344,8 +347,8 @@ class LogEntryAdmin(admin.ModelAdmin):
 
 
 class ThemeAdmin(admin.ModelAdmin):
-    list_display = ["name", "override", "begin_month", "begin_day", "end_month", "end_day"]
-    search_fields = ["name"]
+    list_display:list[str] = ["name", "override", "begin_month", "begin_day", "end_month", "end_day"]
+    search_fields:list[str] = ["name"]
 
     @admin.action(description="Do not force chosen themes")
     def force_unset(modeladmin, request, queryset):
@@ -359,7 +362,7 @@ class ThemeAdmin(admin.ModelAdmin):
     def force_hide(modeladmin, request, queryset):
         queryset.update(override=Theme.HIDE)
 
-    actions = [force_unset, force_show, force_hide]
+    actions:list = [force_unset, force_show, force_hide]
 
 
 admin.site.register(LogEntry, LogEntryAdmin)
